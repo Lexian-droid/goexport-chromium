@@ -25,8 +25,9 @@ def make_tree_writable(root: Path) -> None:
     for path in root.rglob("*"):
         try:
             path.chmod(path.stat().st_mode | stat.S_IWRITE)
-        except FileNotFoundError:
-            # Chromium contains relative symlinks whose targets may be pruned.
+        except OSError:
+            # Chromium contains relative symlinks and a few Windows-illegal
+            # archive paths. They are never build inputs on Windows.
             continue
 
 
