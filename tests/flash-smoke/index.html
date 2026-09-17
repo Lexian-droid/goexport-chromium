@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>GoExport Chromium PPAPI Flash smoke test</title>
+<style>
+body { font: 16px system-ui, sans-serif; max-width: 760px; margin: 3rem auto; }
+code, pre { background: #eee; padding: .2rem .4rem; }
+#flash-object { width: 640px; height: 360px; border: 2px solid #555; }
+</style>
+<h1>PPAPI Flash smoke test</h1>
+<p id="plugin-status">Checking navigator.plugins…</p>
+<object id="flash-object" type="application/x-shockwave-flash" data="fixture.swf">
+  <param name="allowScriptAccess" value="always">
+  <p id="fallback">Flash object fallback is visible.</p>
+</object>
+<pre id="result"></pre>
+<script>
+const plugin = Array.from(navigator.plugins).find(
+  p => /Shockwave Flash/i.test(p.name) ||
+       Array.from(p).some(m => m.type === "application/x-shockwave-flash")
+);
+const result = {
+  flashPluginDetected: Boolean(plugin),
+  pluginName: plugin ? plugin.name : null,
+  mimeTypeEnabled: Boolean(navigator.mimeTypes["application/x-shockwave-flash"]),
+  objectType: document.getElementById("flash-object").type,
+};
+document.getElementById("plugin-status").textContent =
+  plugin ? "PPAPI Flash is advertised to the page." : "PPAPI Flash was not detected.";
+document.getElementById("result").textContent = JSON.stringify(result, null, 2);
+document.title = plugin ? "PASS: PPAPI Flash detected" : "FAIL: PPAPI Flash missing";
+</script>
