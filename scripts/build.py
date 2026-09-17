@@ -38,6 +38,14 @@ def main() -> int:
     out = source / "out" / "GoExport"
     out.mkdir(parents=True, exist_ok=True)
 
+    if args.platform == "linux":
+        run(
+            sys.executable,
+            "build/linux/sysroot_scripts/install-sysroot.py",
+            "--arch=amd64",
+            cwd=source,
+        )
+
     gn = shutil.which("gn")
     if not gn:
         bootstrap = source / "tools/gn/bootstrap/bootstrap.py"
