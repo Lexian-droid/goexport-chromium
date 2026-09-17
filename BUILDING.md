@@ -1,39 +1,27 @@
 # Building GoExport Chromium
 
-## Why full builds use self-hosted runners
+## GitHub-hosted build experiment
 
-Chromium 87 is a 2020 codebase with a large checkout and strict host-toolchain expectations. A clean source tree plus build output commonly needs tens of gigabytes, while a release build can run for hours.
+The release workflow attempts all three x64 builds on current GitHub-hosted images:
 
-As of this project's creation, standard modern GitHub-hosted images are not a reliable target:
+- Linux: `ubuntu-24.04`
+- Windows: `windows-2025`
+- macOS Intel: `macos-15-intel`
 
-- Windows x64: Chromium 87 expects the Visual Studio 2019-era Chromium toolchain. Current hosted images primarily target newer Visual Studio releases.
-- macOS x64: Chromium 87 predates current Xcode/macOS SDKs, while older Intel runner images have been retired over time.
-- Linux x64: a build is the most feasible of the three, but standard runner disk and six-hour job limits make a clean release build unreliable.
+This is intentionally an experiment against real current runners. Chromium 87 is a 2020 codebase, so failures caused by modern Python, compiler, SDK, system-library, disk, or six-hour job limits are expected to be fixed from the resulting logs rather than hidden behind nonexistent runner labels.
 
-The release workflow therefore pins logical self-hosted labels and keeps the small source-patch validation job on `ubuntu-22.04`. This is deliberate: it does not silently omit a platform or publish an artifact from an unverified partial build.
-
-## Builder labels
-
-Register one ephemeral x64 runner for each label:
-
-- `goexport-chromium-linux-x64`
-- `goexport-chromium-windows-x64`
-- `goexport-chromium-macos-x64`
-
-Each runner must also carry the standard `self-hosted` and OS labels.
-
-Recommended minimum: 16 CPU cores, 32 GB RAM, 150 GB free disk, and a persistent download cache between ephemeral jobs.
+The Linux job removes several unrelated preinstalled SDK directories to recover build space. Windows and macOS initially run without destructive cleanup so their actual free-space and toolchain failures remain visible.
 
 ## Host prerequisites
 
-All builders need:
+A local builder needs:
 
 - Git
-- Python 3.8 or a compatible Python 3 release
+- Python 3
 - Ninja
-- C/C++ toolchains supported by Chromium 87
+- a C/C++ toolchain accepted by Chromium 87
 - system build dependencies required by the corresponding ungoogled-chromium platform
-- enough disk for the downloaded source and `out/GoExport`
+- enough disk for Chromium source and `out/GoExport`
 
 Platform-specific packaging projects remain useful references:
 
@@ -60,7 +48,7 @@ The script:
 
 ## Cache
 
-Cache `build/download-cache` on trusted runners. Do not cache `build/src` across untrusted pull requests because it is executable build input.
+Cache `build/download-cache` only on trusted runners. Do not cache `build/src` across untrusted pull requests because it is executable build input.
 
 ## Adobe Flash
 
