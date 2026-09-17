@@ -48,8 +48,19 @@ def main() -> int:
             "-i", "downloads.ini", cwd=uc)
         if source.exists():
             shutil.rmtree(source)
-        run(sys.executable, "utils/downloads.py", "unpack", "-c", str(cache),
-            "-i", "downloads.ini", "--", str(source), cwd=uc)
+
+        unpack_args = [
+            sys.executable, "utils/downloads.py", "unpack",
+            "-c", str(cache), "-i", "downloads.ini",
+        ]
+        if sys.platform == "win32":
+            # Current 7-Zip rejects Chromium 87's legitimate relative symlinks
+            # as "dangerous" and exits with status 2. Empty extractor paths make
+            # ungoogled-chromium use its built-in Python tar extractor, which is
+            # the project's intended Windows fallback.
+            unpack_args.extend(["--7z-path", "", "--winrar-path", ""])
+        unpack_args.extend(["--", str(source)])
+        run(*unpack_args, cwd=uc)
 
     if not source.exists():
         raise RuntimeError(f"Chromium source directory does not exist: {source}")
