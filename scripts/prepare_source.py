@@ -4,6 +4,7 @@
 import argparse
 import json
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,16 @@ PATCH = ROOT / "patches/ungoogled-chromium/enable-automatic-ppapi-flash.patch"
 def run(*args: str, cwd: Path | None = None) -> None:
     print("+", " ".join(args), flush=True)
     subprocess.run(args, cwd=cwd, check=True)
+
+
+def make_tree_writable(root: Path) -> None:
+    """Clear archive read-only attributes before Ungoogled Chromium pruning."""
+    for path in root.rglob("*"):
+        try:
+            path.chmod(path.stat().st_mode | stat.S_IWRITE)
+        except FileNotFoundError:
+            # Chromium contains relative symlinks whose targets may be pruned.
+            continue
 
 
 def main() -> int:
@@ -56,8 +67,7 @@ def main() -> int:
         if sys.platform == "win32":
             # Current 7-Zip rejects Chromium 87's legitimate relative symlinks
             # as "dangerous" and exits with status 2. Empty extractor paths make
-            # ungoogled-chromium use its built-in Python tar extractor, which is
-            # the project's intended Windows fallback.
+            # ungoogled-chromium use its built-in Python tar extractor.
             unpack_args.extend(["--7z-path", "", "--winrar-path", ""])
         unpack_args.extend(["--", str(source)])
         run(*unpack_args, cwd=uc)
@@ -65,8 +75,25 @@ def main() -> int:
     if not source.exists():
         raise RuntimeError(f"Chromium source directory does not exist: {source}")
 
+    if sys.platform == "win32":
+        # Python's tar extractor preserves Unix modes as Windows read-only
+        # attributes. prune_binaries.py must be able to remove those files.
+        make_tree_writable(source)
+
     run(sys.executable, "utils/prune_binaries.py", str(source), "pruning.list", cwd=uc)
     run(sys.executable, "utils/patches.py", "apply", str(source), "patches", cwd=uc)
+
+    if sys.platform.startswith("linux"):
+        # Install while Chromium's canonical download hostname is intact.
+        # Ungoogled Chromium's following domain-substitution pass deliberately
+        # rewrites that hostname, which makes this legacy helper unable to fetch.
+        run(
+            sys.executable,
+            "build/linux/sysroot_scripts/install-sysroot.py",
+            "--arch=amd64",
+            cwd=source,
+        )
+
     run(
         sys.executable, "utils/domain_substitution.py", "apply",
         "-r", "domain_regex.list", "-f", "domain_substitution.list",
