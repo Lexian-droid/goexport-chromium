@@ -1,55 +1,54 @@
 # Building GoExport Chromium
 
-## GitHub-hosted build experiment
+## Hosted Linux x64 release
 
-The release workflow attempts all three x64 builds on current GitHub-hosted images:
+GitHub Actions uses the exact Chromium 87 platform build recipe from:
 
-- Linux: `ubuntu-24.04`
-- Windows: `windows-2025`
-- macOS Intel: `macos-15-intel`
+- `ungoogled-chromium-portablelinux 87.0.4280.141-1.1`
 
-This is intentionally an experiment against real current runners. Chromium 87 is a 2020 codebase, so failures caused by modern Python, compiler, SDK, system-library, disk, or six-hour job limits are expected to be fixed from the resulting logs rather than hidden behind nonexistent runner labels.
+That recipe supplies the legacy Docker build stages, portable-Linux GN flags, platform patches, and packaging behavior expected by Ungoogled Chromium 87. The workflow copies GoExport's Flash patch into the platform patch series so it is applied after both the base Ungoogled Chromium and platform-specific patches.
 
-The Linux job removes several unrelated preinstalled SDK directories to recover build space. Windows and macOS initially run without destructive cleanup so their actual free-space and toolchain failures remain visible.
+The build runs on `ubuntu-24.04` only as a Docker host. The compiler and build dependencies are defined by the historical platform recipe, not the current Ubuntu image.
 
-## Host prerequisites
+## Windows x64
 
-A local builder needs:
+The matching `ungoogled-chromium-windows 87.0.4280.141-1.1` recipe requires:
 
-- Git
-- Python 3
-- Ninja
-- a C/C++ toolchain accepted by Chromium 87
-- system build dependencies required by the corresponding ungoogled-chromium platform
-- enough disk for Chromium source and `out/GoExport`
+- Visual Studio 2019-era C++ tools;
+- Python 2.7 with `pypiwin32`;
+- Python 3;
+- historical LLVM and Node build inputs.
 
-Platform-specific packaging projects remain useful references:
+Those requirements are not reliably obtainable or supportable on current GitHub-hosted Windows images. In particular, the platform recipe downloads a 2020 LLVM snapshot and invokes Python 2 Chromium scripts. This repository intentionally does not label a current hosted runner as a working Windows build.
 
-- [Portable Linux](https://github.com/ungoogled-software/ungoogled-chromium-portablelinux)
-- [Windows](https://github.com/ungoogled-software/ungoogled-chromium-windows)
-- [macOS](https://github.com/ungoogled-software/ungoogled-chromium-macos)
-
-## Build command
+To create a Windows build, use a dedicated self-hosted Windows VM with the toolchain specified by the pinned platform recipe. Copy the GoExport Flash patch into that recipe's `patches/goexport/` directory and append this line to `patches/series`:
 
 ```text
-python scripts/build.py --platform <linux|windows|macos> --jobs <count>
+goexport/enable-automatic-ppapi-flash.patch
 ```
 
-The script:
+## macOS x64
 
-1. clones ungoogled-chromium tag `87.0.4280.141-1`;
-2. downloads Chromium `87.0.4280.141`;
-3. prunes binaries and applies the upstream ungoogled patch series;
-4. applies the isolated GoExport Flash patch;
-5. verifies the source invariants;
-6. generates an official non-component build;
-7. builds Chromium and ChromeDriver;
-8. packages a portable archive without Flash.
+Ungoogled Chromium's macOS platform repository has no `87.0.4280.141` recipe. Its final Chromium 87 recipes are older point releases and require Xcode 8–9 plus Python 2.7. Current `macos-15-intel` runners ship a much newer Xcode and cannot provide a reliable Chromium 87 build environment.
 
-## Cache
+A macOS release therefore requires a self-hosted Intel macOS builder with the historical Xcode/Python environment, using the closest supported Chromium 87 macOS platform recipe. It must be released under that actual Chromium version, not falsely labeled as `87.0.4280.141`.
 
-Cache `build/download-cache` only on trusted runners. Do not cache `build/src` across untrusted pull requests because it is executable build input.
+## Local Linux build
 
-## Adobe Flash
+Use the pinned platform project:
 
-No Flash binary is downloaded or packaged. Supply a compatible PPAPI library at runtime with `--ppapi-flash-path` and `--ppapi-flash-version`. Adobe's post-EOL kill switch is inside Adobe's binary, not Chromium's permission code; choose a legally obtained build appropriate to your environment.
+```bash
+git clone --branch 87.0.4280.141-1.1 --recurse-submodules \
+  https://github.com/ungoogled-software/ungoogled-chromium-portablelinux.git
+cd ungoogled-chromium-portablelinux
+mkdir -p patches/goexport
+cp /path/to/enable-automatic-ppapi-flash.patch patches/goexport/
+printf '\ngoexport/enable-automatic-ppapi-flash.patch\n' >> patches/series
+./docker-build.sh
+```
+
+The archive is created under `build/`. No Adobe Flash binary is downloaded or packaged.
+
+## Validation
+
+Run the resulting executable against `tests/flash-smoke/index.html` with a legally obtained PPAPI Flash library supplied through `--ppapi-flash-path` and `--ppapi-flash-version`. Verify that the plugin is detected, the page does not show the Flash permission block, and it still works after a full browser restart using a new profile.
