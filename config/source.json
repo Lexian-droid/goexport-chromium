@@ -1,0 +1,5 @@
+{
+  "chromium_version": "87.0.4280.141",
+  "ungoogled_chromium_ref": "87.0.4280.141-1",
+  "ungoogled_chromium_repository": "https://github.com/ungoogled-software/ungoogled-chromium.git"
+}
