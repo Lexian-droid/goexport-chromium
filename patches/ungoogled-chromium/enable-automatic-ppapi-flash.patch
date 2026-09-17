@@ -1,0 +1,64 @@
+From: GoExport Chromium maintainers <noreply@goexport.invalid>
+Subject: [PATCH] Allow PPAPI Flash automatically and persist its settings
+
+Chromium 87 has four separate gates that prevent an externally supplied PPAPI
+Flash plugin from loading without interaction:
+
+* the default PLUGINS setting is BLOCK;
+* the PLUGINS setting is registered as EPHEMERAL;
+* PluginUtils demotes a default ALLOW to DETECT_IMPORTANT_CONTENT; and
+* PluginInfoHostImpl defaults both allow-outdated and run-all-in-allow-mode off.
+
+Change only those Flash/plugin gates. PPAPI discovery, sandboxing, and all
+unrelated content settings remain unchanged.
+
+--- a/components/content_settings/core/browser/content_settings_registry.cc
++++ b/components/content_settings/core/browser/content_settings_registry.cc
+@@ -139,7 +139,7 @@ void ContentSettingsRegistry::Init() {
+            ContentSettingsInfo::PERSISTENT,
+            ContentSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
+ 
+-  Register(ContentSettingsType::PLUGINS, "plugins", CONTENT_SETTING_BLOCK,
++  Register(ContentSettingsType::PLUGINS, "plugins", CONTENT_SETTING_ALLOW,
+            WebsiteSettingsInfo::UNSYNCABLE,
+            WhitelistedSchemes(kChromeUIScheme, kChromeDevToolsScheme),
+            ValidSettings(CONTENT_SETTING_ALLOW, CONTENT_SETTING_BLOCK,
+@@ -148,7 +148,7 @@ void ContentSettingsRegistry::Init() {
+            WebsiteSettingsInfo::SINGLE_ORIGIN_WITH_EMBEDDED_EXCEPTIONS_SCOPE,
+            WebsiteSettingsRegistry::DESKTOP,
+            ContentSettingsInfo::INHERIT_IN_INCOGNITO,
+-           ContentSettingsInfo::EPHEMERAL,
++           ContentSettingsInfo::PERSISTENT,
+            ContentSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
+ 
+   Register(ContentSettingsType::POPUPS, "popups", CONTENT_SETTING_BLOCK,
+--- a/chrome/browser/plugins/plugin_utils.cc
++++ b/chrome/browser/plugins/plugin_utils.cc
+@@ -81,12 +81,8 @@ void GetPluginContentSettingInternal(
+   if (is_managed)
+     *is_managed = info.source == content_settings::SETTING_SOURCE_POLICY;
+ 
+-  // Special behavior for non-JavaScript treated plugins (Flash):
++  // Special behavior for non-JavaScript treated plugins (Flash).
+   if (!use_javascript_setting) {
+-    // ALLOW-by-default is obsolete and should be treated as DETECT.
+-    if (*setting == CONTENT_SETTING_ALLOW && uses_default_content_setting)
+-      *setting = CONTENT_SETTING_DETECT_IMPORTANT_CONTENT;
+-
+     // Unless the setting is explicitly ALLOW, return BLOCK for any scheme that
+     // is not HTTP, HTTPS, FILE, or chrome-extension.
+     if (*setting != CONTENT_SETTING_ALLOW &&
+--- a/chrome/browser/plugins/plugin_info_host_impl.cc
++++ b/chrome/browser/plugins/plugin_info_host_impl.cc
+@@ -166,8 +166,8 @@ void PluginInfoHostImpl::Context::ShutdownOnUIThread() {
+ 
+ // static
+ void PluginInfoHostImpl::RegisterUserPrefs(
+     user_prefs::PrefRegistrySyncable* registry) {
+-  registry->RegisterBooleanPref(prefs::kPluginsAllowOutdated, false);
+-  registry->RegisterBooleanPref(prefs::kRunAllFlashInAllowMode, false);
++  registry->RegisterBooleanPref(prefs::kPluginsAllowOutdated, true);
++  registry->RegisterBooleanPref(prefs::kRunAllFlashInAllowMode, true);
+ }
+ 
+ PluginInfoHostImpl::~PluginInfoHostImpl() {}
