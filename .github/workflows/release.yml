@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  verify-patch:
+  verify-flash-patch:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -34,33 +34,13 @@ jobs:
           git -C source apply ../patches/ungoogled-chromium/enable-automatic-ppapi-flash.patch
           python3 scripts/verify_patch.py source
 
-  build:
-    needs: verify-patch
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux
-            runner: ubuntu-24.04
-            artifact: goexport-chromium-87-linux-x64
-          - platform: windows
-            runner: windows-2025
-            artifact: goexport-chromium-87-windows-x64
-          - platform: macos
-            runner: macos-15-intel
-            artifact: goexport-chromium-87-macos-x64
-    runs-on: ${{ matrix.runner }}
+  build-linux:
+    needs: verify-flash-patch
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install macOS legacy Python compatibility
-        if: matrix.platform == 'macos'
-        run: python -m pip install --disable-pip-version-check "setuptools==80.9.0"
-      - name: Reclaim Linux runner disk space
-        if: matrix.platform == 'linux'
+      - name: Reclaim runner disk space
         shell: bash
         run: |
           sudo rm -rf /usr/local/lib/android
@@ -69,31 +49,54 @@ jobs:
           sudo rm -rf /usr/local/.ghcup
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           df -h
-      - name: Show runner toolchain
+      - name: Clone Chromium 87 portable-Linux build recipe
         shell: bash
         run: |
-          python --version
-          git --version
-          ninja --version || true
-          df -h || true
-      - name: Build and package
-        run: python scripts/build.py --platform ${{ matrix.platform }}
+          git clone --depth 1 --branch 87.0.4280.141-1.1 --recurse-submodules \
+            https://github.com/ungoogled-software/ungoogled-chromium-portablelinux.git platform
+          mkdir -p platform/patches/goexport
+          cp patches/ungoogled-chromium/enable-automatic-ppapi-flash.patch \
+            platform/patches/goexport/enable-automatic-ppapi-flash.patch
+          printf '\ngoexport/enable-automatic-ppapi-flash.patch\n' >> platform/patches/series
+      - name: Build and package in the platform's legacy Docker environment
+        shell: bash
+        working-directory: platform
+        run: |
+          docker build --rm -f docker-stage1/Dockerfile \
+            -t goexport-chromium87-stage1:local docker-stage1
+          docker build --rm -f Dockerfile-stage2 \
+            -t goexport-chromium87-stage2:local .
+          docker run --rm \
+            -v "$PWD/build:/repo/build" \
+            goexport-chromium87-stage2:local \
+            bash -c "./build.sh && ./package.sh"
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/*
+          name: goexport-chromium-87-linux-x64
+          path: platform/build/*.tar.xz
           if-no-files-found: error
           retention-days: 14
 
+  legacy-platform-status:
+    needs: verify-flash-patch
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Record documented Windows and macOS build constraints
+        shell: bash
+        run: |
+          sed -n '/## Windows x64/,/## macOS x64/p' BUILDING.md
+          sed -n '/## macOS x64/,$p' BUILDING.md
+
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: build
+    needs: [build-linux, legacy-platform-status]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: goexport-chromium-87-linux-x64
           path: release-assets
-          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -102,5 +105,9 @@ jobs:
           body: |
             Custom ungoogled-chromium 87 build for isolated GoExport PPAPI Flash automation.
 
-            Adobe Flash Player is not included. Supply a legally obtained PPAPI library at runtime.
-            See README.md and BUILDING.md before use.
+            This hosted release contains the portable Linux x64 build. Windows and macOS
+            Chromium 87 builds require documented vintage self-hosted builders; see
+            BUILDING.md.
+
+            Adobe Flash Player is not included. Supply a legally obtained PPAPI library
+            at runtime.
