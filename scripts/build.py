@@ -54,6 +54,9 @@ def main() -> int:
         # Official Chromium 87 builds default to PGO phase 2, but the standalone
         # source archive does not contain Google's matching profile data.
         "chrome_pgo_phase=0",
+        # Ungoogled Chromium's build configuration expects this Chromium 87
+        # Safe Browsing switch even when Safe Browsing is compiled out.
+        "safe_browsing_mode=0",
         "enable_plugins=true",
         "enable_nacl=false",
         "enable_widevine=false",
