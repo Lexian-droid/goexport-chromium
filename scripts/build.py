@@ -38,14 +38,6 @@ def main() -> int:
     out = source / "out" / "GoExport"
     out.mkdir(parents=True, exist_ok=True)
 
-    if args.platform == "linux":
-        run(
-            sys.executable,
-            "build/linux/sysroot_scripts/install-sysroot.py",
-            "--arch=amd64",
-            cwd=source,
-        )
-
     gn = shutil.which("gn")
     if not gn:
         bootstrap = source / "tools/gn/bootstrap/bootstrap.py"
@@ -59,6 +51,9 @@ def main() -> int:
         "is_component_build=false",
         "symbol_level=0",
         "blink_symbol_level=0",
+        # Official Chromium 87 builds default to PGO phase 2, but the standalone
+        # source archive does not contain Google's matching profile data.
+        "chrome_pgo_phase=0",
         "enable_plugins=true",
         "enable_nacl=false",
         "enable_widevine=false",
