@@ -9,7 +9,7 @@ A narrowly scoped [ungoogled-chromium](https://github.com/ungoogled-software/ung
 
 - Chromium: `87.0.4280.141`
 - ungoogled-chromium: `87.0.4280.141-1`
-- Initial project release: `v87.0.4280.141-goexport.1`
+- Hosted Linux build recipe: `ungoogled-chromium-portablelinux 87.0.4280.141-1.1`
 
 This repository stores the small GoExport-specific overlay, build tooling, and validation assets. It does not duplicate Chromium's source tree and does not redistribute Adobe Flash Player.
 
@@ -34,17 +34,11 @@ The normal PPAPI discovery path remains intact, including:
 
 No OS policy, registry entry, global preference, or pre-edited browser profile is required.
 
-## Build
+## Builds
 
-The tag workflow prepares ungoogled-chromium, applies its upstream patch set, applies the GoExport patch, builds `chrome` and `chromedriver`, packages a portable archive, and attaches successful artifacts to the GitHub Release.
+The release workflow now uses Ungoogled Chromium's Chromium 87 portable-Linux build recipe rather than attempting to assemble a modern host toolchain around the source archive. The GoExport Flash patch is appended as the final platform patch, after Ungoogled Chromium and its platform patches.
 
-Run locally:
-
-```bash
-python3 scripts/build.py --platform linux --jobs 8
-```
-
-See [BUILDING.md](BUILDING.md) for prerequisites, platform status, exact commands, and legacy-runner caveats.
+Current GitHub-hosted releases provide portable Linux x64. Chromium 87 Windows and macOS packaging need historical self-hosted builders; this is documented in [BUILDING.md](BUILDING.md).
 
 ## Runtime
 
