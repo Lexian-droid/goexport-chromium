@@ -1,0 +1,80 @@
+name: Build and release Chromium 87
+
+on:
+  push:
+    tags:
+      - "v87.0.4280.141-goexport.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify-patch:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Chromium files
+        shell: bash
+        run: |
+          mkdir -p source/components/content_settings/core/browser
+          mkdir -p source/chrome/browser/plugins
+          base=https://raw.githubusercontent.com/chromium/chromium/87.0.4280.141
+          curl --fail --location "$base/components/content_settings/core/browser/content_settings_registry.cc"             --output source/components/content_settings/core/browser/content_settings_registry.cc
+          curl --fail --location "$base/chrome/browser/plugins/plugin_utils.cc"             --output source/chrome/browser/plugins/plugin_utils.cc
+          curl --fail --location "$base/chrome/browser/plugins/plugin_info_host_impl.cc"             --output source/chrome/browser/plugins/plugin_info_host_impl.cc
+      - name: Verify patch applies cleanly
+        run: git -C source apply --check ../patches/ungoogled-chromium/enable-automatic-ppapi-flash.patch
+      - name: Verify patched invariants
+        shell: bash
+        run: |
+          git -C source apply ../patches/ungoogled-chromium/enable-automatic-ppapi-flash.patch
+          python3 scripts/verify_patch.py source
+
+  build:
+    needs: verify-patch
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: goexport-chromium-linux-x64
+            artifact: goexport-chromium-87-linux-x64
+          - platform: windows
+            runner: goexport-chromium-windows-x64
+            artifact: goexport-chromium-87-windows-x64
+          - platform: macos
+            runner: goexport-chromium-macos-x64
+            artifact: goexport-chromium-87-macos-x64
+    runs-on: [self-hosted, "${{ matrix.runner }}"]
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and package
+        run: python scripts/build.py --platform ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*
+          body: |
+            Custom ungoogled-chromium 87 build for isolated GoExport PPAPI Flash automation.
+
+            Adobe Flash Player is not included. Supply a legally obtained PPAPI library at runtime.
+            See README.md and BUILDING.md before use.
