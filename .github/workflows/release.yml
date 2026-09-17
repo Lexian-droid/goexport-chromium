@@ -63,12 +63,12 @@ jobs:
         working-directory: platform
         run: |
           docker build --rm -f docker-stage1/Dockerfile \
-            -t goexport-chromium87-stage1:local docker-stage1
+            -t ug-chromium-builder-stage1:latest docker-stage1
           docker build --rm -f Dockerfile-stage2 \
-            -t goexport-chromium87-stage2:local .
+            -t ug-chromium-builder-stage2:latest .
           docker run --rm \
             -v "$PWD/build:/repo/build" \
-            goexport-chromium87-stage2:local \
+            ug-chromium-builder-stage2:latest \
             bash -c "./build.sh && ./package.sh"
       - uses: actions/upload-artifact@v4
         with:
